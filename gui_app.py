@@ -381,15 +381,43 @@ class ShortsMakerGUI(QMainWindow):
         else:
             issues.append(f"✅ Project name: {self.customer_name_input.text()}")
         
-        # Show results
+        # Show results with proper styling
         message = "\n".join(issues)
         if warnings:
             message += "\n\n" + "\n".join(warnings)
         
+        # Create message box with explicit styling
+        msg_box = QMessageBox(self)
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #333333;
+                font-size: 10pt;
+            }
+            QMessageBox QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 20px;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        
         if any("❌" in i for i in issues):
-            QMessageBox.warning(self, "Validation Issues", message)
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle("Validation Issues")
         else:
-            QMessageBox.information(self, "Validation Passed ✓", message + "\n\n✅ All settings are valid! Ready to generate videos.")
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            msg_box.setWindowTitle("Validation Passed ✓")
+            message += "\n\n✅ All settings are valid! Ready to generate videos."
+        
+        msg_box.setText(message)
+        msg_box.exec()
         
         self.status_label.setText("Validation complete - check results")
     
@@ -676,8 +704,29 @@ class ShortsMakerGUI(QMainWindow):
             import subprocess
             subprocess.Popen(f'explorer "{output_path}"')
         else:
-            QMessageBox.information(self, "Folder Not Found", 
-                f"Output folder doesn't exist yet.\n\nIt will be created when you generate videos.\n\nPath: {output_path}")
+            msg_box = QMessageBox(self)
+            msg_box.setStyleSheet("""
+                QMessageBox {
+                    background-color: white;
+                }
+                QMessageBox QLabel {
+                    color: #333333;
+                    font-size: 10pt;
+                }
+                QMessageBox QPushButton {
+                    background-color: #2196F3;
+                    color: white;
+                    padding: 8px 20px;
+                    border-radius: 4px;
+                }
+                QMessageBox QPushButton:hover {
+                    background-color: #1976D2;
+                }
+            """)
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            msg_box.setWindowTitle("Folder Not Found")
+            msg_box.setText(f"Output folder doesn't exist yet.\n\nIt will be created when you generate videos.\n\nPath: {output_path}")
+            msg_box.exec()
     
     def create_folder_selector(self, label_text, default_path):
         """Helper to create folder selection widgets"""
@@ -852,7 +901,30 @@ class ShortsMakerGUI(QMainWindow):
 • Test with JSONLint.com if you get errors
         """
         
-        QMessageBox.information(self, "Create New Content", help_text)
+        msg_box = QMessageBox(self)
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #333333;
+                font-size: 10pt;
+            }
+            QMessageBox QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 20px;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.setWindowTitle("Create New Content")
+        msg_box.setText(help_text)
+        msg_box.exec()
     
     def browse_custom_json(self):
         """Browse for a custom JSON file anywhere on the computer"""
@@ -969,33 +1041,60 @@ class ShortsMakerGUI(QMainWindow):
             self.worker.start()
             
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to start generation: {str(e)}")
+            self.show_styled_message("Error", f"Failed to start generation: {str(e)}", QMessageBox.Icon.Critical)
     
     def validate_inputs(self):
         """Validate all inputs before generation"""
         # Check folders exist
         video_folder = self.background_videos_field.text()
         if not os.path.exists(video_folder):
-            QMessageBox.warning(self, "Warning", f"Video folder not found: {video_folder}")
+            self.show_styled_message("Warning", f"Video folder not found: {video_folder}", QMessageBox.Icon.Warning)
             return False
         
         audio_folder = self.audio_files_field.text()
         if not os.path.exists(audio_folder):
-            QMessageBox.warning(self, "Warning", f"Audio folder not found: {audio_folder}")
+            self.show_styled_message("Warning", f"Audio folder not found: {audio_folder}", QMessageBox.Icon.Warning)
             return False
         
         # Check if folders have files
         video_files = [f for f in os.listdir(video_folder) if f.endswith('.mp4')]
         if not video_files:
-            QMessageBox.warning(self, "Warning", "No MP4 files found in video folder!")
+            self.show_styled_message("Warning", "No MP4 files found in video folder!", QMessageBox.Icon.Warning)
             return False
         
         audio_files = [f for f in os.listdir(audio_folder) if f.endswith('.mp3')]
         if not audio_files:
-            QMessageBox.warning(self, "Warning", "No MP3 files found in audio folder!")
+            self.show_styled_message("Warning", "No MP3 files found in audio folder!", QMessageBox.Icon.Warning)
             return False
         
         return True
+    
+    def show_styled_message(self, title, message, icon=QMessageBox.Icon.Information):
+        """Show a styled message box"""
+        msg_box = QMessageBox(self)
+        msg_box.setStyleSheet("""
+            QMessageBox {
+                background-color: white;
+            }
+            QMessageBox QLabel {
+                color: #333333;
+                font-size: 10pt;
+            }
+            QMessageBox QPushButton {
+                background-color: #2196F3;
+                color: white;
+                padding: 8px 20px;
+                border-radius: 4px;
+                min-width: 80px;
+            }
+            QMessageBox QPushButton:hover {
+                background-color: #1976D2;
+            }
+        """)
+        msg_box.setIcon(icon)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.exec()
     
     def get_configuration(self):
         """Get all configuration settings"""
@@ -1081,10 +1180,10 @@ class ShortsMakerGUI(QMainWindow):
         
         if success:
             self.log_text.append(f"\n✅ {message}")
-            QMessageBox.information(self, "Success", message)
+            self.show_styled_message("Success", message, QMessageBox.Icon.Information)
         else:
             self.log_text.append(f"\n❌ {message}")
-            QMessageBox.critical(self, "Error", message)
+            self.show_styled_message("Error", message, QMessageBox.Icon.Critical)
 
 
 def main():
