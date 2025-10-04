@@ -1,3 +1,98 @@
+# ============================================
+# SHORTSMAKER PRO - PROJECT SPECIFIC
+# ============================================
+
+# ==================
+# CUSTOMER DATA & PRIVACY (MOST IMPORTANT!)
+# ==================
+# Never commit customer videos, images, or personal data
+customers/*/
+!customers/.gitkeep
+
+# Specific customer output files
+customers/*/*.mp4
+customers/*/*.mp4.mp4
+customers/*/*.csv
+customers/*/*.jpg
+customers/*/*.png
+customers/*/verse_images/
+customers/*/post_images/
+
+# ==================
+# RUNTIME & CACHE FILES
+# ==================
+runtime.pk
+*.pkl
+*.pickle
+*.cache
+
+# ==================
+# LARGE MEDIA FILES (OPTIONAL - UNCOMMENT IF NEEDED)
+# ==================
+# If your videos/audio folders are huge (1GB+), uncomment these:
+# videos/*.mp4
+# audio/*.mp3
+# audio/*.wav
+
+# But keep sample files for testing:
+!videos/sample*.mp4
+!audio/sample*.mp3
+
+# ==================
+# BACKUP & TEMPORARY FILES
+# ==================
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bak
+*.backup
+*.old
+*.orig
+*.tmp
+*.temp
+*~
+
+# ==================
+# OS GENERATED FILES
+# ==================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ==================
+# IDE & EDITOR FILES
+# ==================
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.pydevproject
+
+# ==================
+# TEST & DEBUG OUTPUT
+# ==================
+test_output/
+temp/
+tmp/
+debug/
+*.log
+logs/
+
+
+# ============================================
+# STANDARD PYTHON .GITIGNORE (FROM GITHUB)
+# ============================================
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -174,7 +269,7 @@ cython_debug/
 .pypirc
 
 # Cursor  
-#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to 
+#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to 
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
