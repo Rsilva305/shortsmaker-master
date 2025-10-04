@@ -9,7 +9,7 @@ import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QLabel, QLineEdit, 
                              QSpinBox, QComboBox, QProgressBar, QTextEdit,
-                             QFileDialog, QGroupBox, QMessageBox, QTabWidget)
+                             QFileDialog, QGroupBox, QMessageBox, QTabWidget, QCheckBox)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont, QIcon
 from pathlib import Path
@@ -50,7 +50,8 @@ class VideoCreatorThread(QThread):
                 customer_name=self.config['customer_name'],
                 number_of_videos=total_videos,
                 fonts=self.config['fonts'],
-                progress_callback=self.update_progress
+                progress_callback=self.update_progress,
+                use_logo=self.config.get('use_logo', True)  # Pass logo setting
             )
             
             self.finished.emit(True, f"Successfully created {total_videos} videos!")
@@ -260,9 +261,21 @@ class ShortsMakerGUI(QMainWindow):
         folders_layout.addLayout(self.audio_folder_input)
         
         # Logo File
+        logo_section = QHBoxLayout()
         logo_label = QLabel("Logo/Watermark Image:")
         logo_label.setStyleSheet("font-weight: bold; color: #333333;")
-        folders_layout.addWidget(logo_label)
+        logo_section.addWidget(logo_label)
+        
+        # Add checkbox for enabling/disabling logo
+        self.use_logo_checkbox = QCheckBox("Use Logo/Watermark")
+        self.use_logo_checkbox.setChecked(True)  # Default: enabled
+        self.use_logo_checkbox.setStyleSheet("color: #333333; font-weight: normal;")
+        self.use_logo_checkbox.stateChanged.connect(self.toggle_logo_input)
+        logo_section.addWidget(self.use_logo_checkbox)
+        logo_section.addStretch()
+        
+        folders_layout.addLayout(logo_section)
+        
         self.logo_file_input = self.create_file_selector_compact(
             str(self.project_dir / "sources" / "logo.png"),
             "Images (*.png *.jpg *.jpeg)"
@@ -340,8 +353,31 @@ class ShortsMakerGUI(QMainWindow):
         # Store reference
         if "logo" in default_path.lower():
             self.logo_image_field = input_field
+            self.logo_browse_button = browse_btn
         
         return layout
+    
+    def toggle_logo_input(self, state):
+        """Enable or disable logo input based on checkbox"""
+        enabled = (state == 2)  # 2 = Qt.Checked
+        
+        if hasattr(self, 'logo_image_field'):
+            self.logo_image_field.setEnabled(enabled)
+            if enabled:
+                self.logo_image_field.setStyleSheet("background-color: #f9f9f9; color: #333333;")
+            else:
+                self.logo_image_field.setStyleSheet("background-color: #e0e0e0; color: #999999;")
+        
+        if hasattr(self, 'logo_browse_button'):
+            self.logo_browse_button.setEnabled(enabled)
+            if enabled:
+                self.logo_browse_button.setStyleSheet("color: #333333; background-color: #f0f0f0;")
+            else:
+                self.logo_browse_button.setStyleSheet("color: #666666; background-color: #e0e0e0;")
+        
+        # Update status
+        status_text = "Logo enabled" if enabled else "Videos will be created without logo"
+        self.status_label.setText(f"⚙️ Settings updated - {status_text}")
     
     def validate_and_show_summary(self):
         """Validate all settings and show summary"""
@@ -369,11 +405,15 @@ class ShortsMakerGUI(QMainWindow):
             else:
                 issues.append(f"✅ Found {len(audio_files)} audio files")
         
-        logo_file = self.logo_image_field.text()
-        if not os.path.exists(logo_file):
-            warnings.append(f"⚠️ Logo file not found: {logo_file}")
+        # Check logo only if enabled
+        if self.use_logo_checkbox.isChecked():
+            logo_file = self.logo_image_field.text()
+            if not os.path.exists(logo_file):
+                warnings.append(f"⚠️ Logo file not found: {logo_file}")
+            else:
+                issues.append(f"✅ Logo file found")
         else:
-            issues.append(f"✅ Logo file found")
+            issues.append(f"ℹ️ Logo disabled - videos will be created without watermark")
         
         # Check customer name
         if not self.customer_name_input.text():
@@ -1124,6 +1164,7 @@ class ShortsMakerGUI(QMainWindow):
             'output_folder': str(self.project_dir / 'customers'),
             'text_source_font': str(self.project_dir / 'sources/MouldyCheeseRegular-WyMWG.ttf').replace(':', '\\:'),
             'image_file': self.logo_image_field.text(),
+            'use_logo': self.use_logo_checkbox.isChecked(),  # NEW: Pass logo enable state
             'customer_name': self.customer_name_input.text(),
             'number_of_videos': self.num_videos_input.value(),
             'fonts': fonts
@@ -1144,6 +1185,9 @@ class ShortsMakerGUI(QMainWindow):
         except:
             pass
         
+        # Logo status
+        logo_status = "✓ Enabled" if self.use_logo_checkbox.isChecked() else "✗ Disabled"
+        
         summary = f"""
 ╔══════════════════════════════════════════════════════════════╗
 ║              🎬 GENERATION CONFIGURATION                      ║
@@ -1157,7 +1201,7 @@ class ShortsMakerGUI(QMainWindow):
 📁 Resources:
    • Videos: {os.path.basename(self.background_videos_field.text())}
    • Audio: {os.path.basename(self.audio_files_field.text())}
-   • Logo: {os.path.basename(self.logo_image_field.text())}
+   • Logo: {logo_status}
 
 ✅ Ready to generate! Click the button below to start.
         """

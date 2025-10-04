@@ -28,12 +28,13 @@ def create_dirs(output_folder, customer_name, posts=True):
 
 def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folder, 
                   text_source_font, image_file: str, customer_name, number_of_videos, 
-                  fonts: Fonts, posts=False, progress_callback=None):
+                  fonts: Fonts, posts=False, progress_callback=None, use_logo=True):
     """
     Create multiple videos with progress tracking
     
     Args:
         progress_callback: Optional function(current, total) to report progress
+        use_logo: Boolean to enable/disable logo overlay (default: True)
     """
     # Load content data
     json_data = json_handler.get_data(json_file)
@@ -141,6 +142,10 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
         print(f"🎥 Video: {os.path.basename(video_file)}")
         print(f"🎵 Audio: {os.path.basename(audio_file)}")
         print(f"✍️ Font: {os.path.basename(font_file)}")
+        if use_logo:
+            print(f"🖼️ Logo: {os.path.basename(image_file)}")
+        else:
+            print(f"🖼️ Logo: Disabled")
         
         create_video(
             text_verse=text_verse, 
@@ -155,7 +160,8 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
             font_chars=font_chars,
             posts=posts,
             output_path=output_path, 
-            file_name=file_name
+            file_name=file_name,
+            use_logo=use_logo
         )
 
         # Record for spreadsheet
@@ -198,8 +204,12 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
 
 def create_video(text_verse, text_source, text_source_font, text_source_for_image, 
                  video_file: str, audio_file, image_file, font_file, font_size, 
-                 font_chars, output_path, file_name, posts=True):
-    """Create a single video with all overlays"""
+                 font_chars, output_path, file_name, posts=True, use_logo=True):
+    """Create a single video with all overlays
+    
+    Args:
+        use_logo: Boolean to enable/disable logo overlay (default: True)
+    """
     
     # Layout coordinates
     image_y = 0
@@ -241,8 +251,8 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
     # Calculate text position
     text2_y: int = image_text_source_y + verse_height + 75
 
-    # Adjust if text overlaps logo
-    if text2_y > 1200:
+    # Adjust if text overlaps logo (only if logo is used)
+    if use_logo and text2_y > 1200:
         diff = text2_y - 1200
         text2_y = 1200
         image_text_source_y -= diff
@@ -252,25 +262,45 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
     output_folder = output_path
     output_path += f"/{file_name}"
     
-    # Build ffmpeg command
-    ffmpeg_command = (
-        f'ffmpeg -loglevel error -stats -y '
-        f'-loop 1 -i "{image_file}" '
-        f'-i "{audio_file}" '
-        f'-i "{video_file}" '
-        f'-i "{created_verse_image}" '
-        f'-r 24 -filter_complex '
-        f'"[2:v][0:v]overlay=(W-w)/2:{image_y}[v1]; '
-        f'[v1]drawtext=fontfile=\'{text_source_font}\':'
-        f'text=\'{text_source}\':'
-        f'x=(w-text_w)/2:y={text2_y}:'
-        f'fontsize=42:fontcolor={font_color}:'
-        f'enable=\'between(t,{text_start_time},{video_duration})\'[v2]; '
-        f'[v2][3:v]overlay=(W-w)/2:{image_text_source_y}:'
-        f'enable=\'between(t,{text_start_time},{video_duration})\'[v3]" '
-        f'-t {video_duration} -map "[v3]" -map 1 '
-        f'-c:v libx264 -preset veryfast -crf 18 "{output_path}"'
-    )
+    # Build ffmpeg command - WITH or WITHOUT logo
+    if use_logo:
+        # Original command with logo overlay
+        ffmpeg_command = (
+            f'ffmpeg -loglevel error -stats -y '
+            f'-loop 1 -i "{image_file}" '
+            f'-i "{audio_file}" '
+            f'-i "{video_file}" '
+            f'-i "{created_verse_image}" '
+            f'-r 24 -filter_complex '
+            f'"[2:v][0:v]overlay=(W-w)/2:{image_y}[v1]; '
+            f'[v1]drawtext=fontfile=\'{text_source_font}\':'
+            f'text=\'{text_source}\':'
+            f'x=(w-text_w)/2:y={text2_y}:'
+            f'fontsize=42:fontcolor={font_color}:'
+            f'enable=\'between(t,{text_start_time},{video_duration})\'[v2]; '
+            f'[v2][3:v]overlay=(W-w)/2:{image_text_source_y}:'
+            f'enable=\'between(t,{text_start_time},{video_duration})\'[v3]" '
+            f'-t {video_duration} -map "[v3]" -map 1 '
+            f'-c:v libx264 -preset veryfast -crf 18 "{output_path}"'
+        )
+    else:
+        # Simplified command WITHOUT logo overlay
+        ffmpeg_command = (
+            f'ffmpeg -loglevel error -stats -y '
+            f'-i "{audio_file}" '
+            f'-i "{video_file}" '
+            f'-i "{created_verse_image}" '
+            f'-r 24 -filter_complex '
+            f'"[1:v]drawtext=fontfile=\'{text_source_font}\':'
+            f'text=\'{text_source}\':'
+            f'x=(w-text_w)/2:y={text2_y}:'
+            f'fontsize=42:fontcolor={font_color}:'
+            f'enable=\'between(t,{text_start_time},{video_duration})\'[v1]; '
+            f'[v1][2:v]overlay=(W-w)/2:{image_text_source_y}:'
+            f'enable=\'between(t,{text_start_time},{video_duration})\'[v2]" '
+            f'-t {video_duration} -map "[v2]" -map 0 '
+            f'-c:v libx264 -preset veryfast -crf 18 "{output_path}"'
+        )
 
     # Execute ffmpeg
     try:
