@@ -137,6 +137,57 @@ def loop_video_to_duration(video_file: str, target_duration: float, output_file:
         raise
 
 
+def pad_audio_with_silence(input_audio: str, output_audio: str, 
+                           start_delay: float, total_duration: float) -> str:
+    """
+    Pad audio with silence before and after to match target duration
+    
+    This ensures the voice audio is the same length as the video/music
+    
+    Args:
+        input_audio: Original audio file
+        output_audio: Where to save padded audio
+        start_delay: Seconds of silence at the beginning
+        total_duration: Total duration of output
+        
+    Returns:
+        Path to the padded audio
+        
+    Example:
+        Voice is 5 seconds, we want it to start at 1s in a 10s video:
+        pad_audio_with_silence("voice.mp3", "padded.mp3", start_delay=1.0, total_duration=10.0)
+        Result: 1s silence + 5s voice + 4s silence = 10s total
+    """
+    try:
+        voice_duration = get_audio_duration(input_audio)
+        
+        # Calculate padding needed
+        # total = start_delay + voice_duration + end_padding
+        # So: end_padding = total - start_delay - voice_duration
+        
+        print(f"   🔇 Padding audio: {start_delay}s silence before, total {total_duration}s")
+        
+        # Use ffmpeg to add silence padding
+        # adelay adds silence at start
+        # then we pad the end to reach total duration
+        ffmpeg_command = [
+            'ffmpeg',
+            '-i', input_audio,
+            '-af', f'adelay={int(start_delay * 1000)}|{int(start_delay * 1000)},apad=whole_dur={int(total_duration * 1000)}ms',
+            '-y',
+            output_audio
+        ]
+        
+        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        print(f"   ✅ Padded audio created ({total_duration}s total)")
+        return output_audio
+        
+    except Exception as e:
+        print(f"❌ Error padding audio: {str(e)}")
+        raise
+
+
 def mix_voice_and_music(voice_audio: str, background_music: str, output_file: str,
                         video_duration: float, voice_delay: float = 1.0,
                         voice_volume: float = 1.0, music_volume: float = 0.15) -> str:
@@ -144,6 +195,7 @@ def mix_voice_and_music(voice_audio: str, background_music: str, output_file: st
     Mix AI voice with background music - PROPERLY!
     
     Music starts immediately, voice starts after delay, music fades at end.
+    Both streams are same length for reliable mixing!
     
     Args:
         voice_audio: Path to the AI voice audio
@@ -163,12 +215,22 @@ def mix_voice_and_music(voice_audio: str, background_music: str, output_file: st
         print(f"   Music starts at: 0s (immediate)")
         print(f"   Total duration: {video_duration:.1f}s")
         
-        # Get voice duration
         voice_duration = get_audio_duration(voice_audio)
         music_duration = get_audio_duration(background_music)
         
-        # Calculate how long we need to loop the music
-        # Music needs to play for the ENTIRE video duration
+        # Step 1: Pad voice to match video duration (with delay at start)
+        padded_voice = os.path.join(os.path.dirname(output_file) or '.', 'voice_padded.mp3')
+        pad_audio_with_silence(
+            input_audio=voice_audio,
+            output_audio=padded_voice,
+            start_delay=voice_delay,
+            total_duration=video_duration
+        )
+        
+        # Step 2: Prepare music (loop if needed, trim to video duration, add fade)
+        prepared_music = os.path.join(os.path.dirname(output_file) or '.', 'music_prepared.mp3')
+        
+        # Loop music if needed
         if music_duration < video_duration:
             loops_needed = int(video_duration / music_duration) + 1
             print(f"   🔄 Looping background music {loops_needed} times...")
@@ -189,20 +251,27 @@ def mix_voice_and_music(voice_audio: str, background_music: str, output_file: st
             if os.path.exists(music_concat):
                 os.remove(music_concat)
         
-        # Calculate fade duration (last 1.5 seconds)
+        # Add fade to music at end
         fade_start = video_duration - 1.5
         
-        # Mix: Music starts at 0s, Voice starts at delay
-        # Voice gets delayed, music doesn't!
+        subprocess.check_call([
+            'ffmpeg',
+            '-i', background_music,
+            '-af', f'volume={music_volume},afade=t=out:st={fade_start}:d=1.5',
+            '-t', str(video_duration),
+            '-y',
+            prepared_music
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Step 3: Mix the two streams (both are now same length!)
         ffmpeg_command = [
             'ffmpeg',
-            '-i', background_music,  # Music (no delay)
-            '-i', voice_audio,        # Voice (will be delayed)
+            '-i', prepared_music,      # Music (full video duration with fade)
+            '-i', padded_voice,         # Voice (full video duration with delay built-in)
             '-filter_complex',
-            # Delay the voice, add fade to music at end
-            f'[1:a]adelay={int(voice_delay * 1000)}|{int(voice_delay * 1000)},volume={voice_volume}[voice];'
-            f'[0:a]volume={music_volume},afade=t=out:st={fade_start}:d=1.5[music];'
-            f'[music][voice]amix=inputs=2:duration=first:dropout_transition=0',
+            f'[0:a]volume=1.0[music];'  # Music already has volume applied
+            f'[1:a]volume={voice_volume}[voice];'
+            f'[music][voice]amix=inputs=2:duration=first',  # Both same length, so this is safe
             '-t', str(video_duration),
             '-y',
             output_file
@@ -210,7 +279,11 @@ def mix_voice_and_music(voice_audio: str, background_music: str, output_file: st
         
         subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        # Clean up
+        # Clean up temp files
+        for temp_file in [padded_voice, prepared_music]:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        
         if 'music_looped.mp3' in background_music and os.path.exists(background_music):
             os.remove(background_music)
         
