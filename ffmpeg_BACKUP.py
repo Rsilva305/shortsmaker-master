@@ -10,15 +10,6 @@ import verse_handler
 import Fonts
 import cv2
 
-# Import TTS providers
-from providers.elevenlabs_tts import ElevenLabsTTS
-from providers.cartesia_tts import CartesiaTTS
-from utils.audio_utils import get_audio_duration, mix_audio_files, prepare_video_for_audio
-
-# Load environment variables
-from dotenv import load_dotenv
-load_dotenv()
-
 
 def create_dirs(output_folder, customer_name, posts=True):
     """Create necessary output directories"""
@@ -32,50 +23,19 @@ def create_dirs(output_folder, customer_name, posts=True):
     if posts and not os.path.exists(f"{output_path}/post_images"):
         os.makedirs(f"{output_path}/post_images")
     
-    # Create TTS audio folder if using TTS
-    if not os.path.exists(f"{output_path}/tts_audio"):
-        os.makedirs(f"{output_path}/tts_audio")
-    
     return output_path
 
 
 def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folder, 
                   text_source_font, image_file: str, customer_name, number_of_videos, 
-                  fonts: Fonts, posts=False, progress_callback=None, use_logo=True,
-                  use_tts=False, tts_provider=None, tts_voice_id=None):
+                  fonts: Fonts, posts=False, progress_callback=None, use_logo=True):
     """
-    Create multiple videos with progress tracking and optional AI voices
+    Create multiple videos with progress tracking
     
     Args:
         progress_callback: Optional function(current, total) to report progress
         use_logo: Boolean to enable/disable logo overlay (default: True)
-        use_tts: Boolean to enable AI voice generation (default: False)
-        tts_provider: Which TTS provider to use ('elevenlabs' or 'cartesia')
-        tts_voice_id: Voice ID to use for TTS
     """
-    # Initialize TTS provider if needed
-    tts_engine = None
-    if use_tts and tts_provider and tts_voice_id:
-        print(f"\n🎤 Initializing {tts_provider.upper()} TTS provider...")
-        
-        if tts_provider == 'elevenlabs':
-            api_key = os.getenv('ELEVENLABS_API_KEY')
-            if not api_key:
-                print("❌ Error: ELEVENLABS_API_KEY not found in .env file!")
-                use_tts = False
-            else:
-                tts_engine = ElevenLabsTTS(api_key=api_key)
-                print(f"✅ ElevenLabs TTS initialized!")
-        
-        elif tts_provider == 'cartesia':
-            api_key = os.getenv('CARTESIA_API_KEY')
-            if not api_key:
-                print("❌ Error: CARTESIA_API_KEY not found in .env file!")
-                use_tts = False
-            else:
-                tts_engine = CartesiaTTS(api_key=api_key)
-                print(f"✅ Cartesia TTS initialized!")
-    
     # Load content data
     json_data = json_handler.get_data(json_file)
     verses: str = json_data[0]
@@ -180,12 +140,7 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
         # Create the video
         print(f"📝 Quote: {text_source}")
         print(f"🎥 Video: {os.path.basename(video_file)}")
-        
-        if use_tts and tts_engine:
-            print(f"🎤 AI Voice: Enabled ({tts_provider.upper()})")
-        else:
-            print(f"🎵 Audio: {os.path.basename(audio_file)}")
-        
+        print(f"🎵 Audio: {os.path.basename(audio_file)}")
         print(f"✍️ Font: {os.path.basename(font_file)}")
         if use_logo:
             print(f"🖼️ Logo: {os.path.basename(image_file)}")
@@ -206,11 +161,7 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
             posts=posts,
             output_path=output_path, 
             file_name=file_name,
-            use_logo=use_logo,
-            use_tts=use_tts,
-            tts_engine=tts_engine,
-            tts_voice_id=tts_voice_id,
-            video_index=i
+            use_logo=use_logo
         )
 
         # Record for spreadsheet
@@ -244,8 +195,6 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
         
         print(f"\n{'='*60}")
         print(f"\033[0;32m🎉 SUCCESS! Created {number_of_videos} videos for {customer_name}!")
-        if use_tts:
-            print(f"🎤 All videos have AI voice narration!")
         print(f"⏱️ Total run time: {round(run_time_total, 2)} seconds = {round(run_time_total / 60, 2)} minutes")
         print(f"📊 Average per video: {round(run_time_average, 2)} seconds")
         print(f"📁 Output folder: {output_path}")
@@ -255,16 +204,11 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
 
 def create_video(text_verse, text_source, text_source_font, text_source_for_image, 
                  video_file: str, audio_file, image_file, font_file, font_size, 
-                 font_chars, output_path, file_name, posts=True, use_logo=True,
-                 use_tts=False, tts_engine=None, tts_voice_id=None, video_index=0):
-    """Create a single video with all overlays and optional AI voice
+                 font_chars, output_path, file_name, posts=True, use_logo=True):
+    """Create a single video with all overlays
     
     Args:
         use_logo: Boolean to enable/disable logo overlay (default: True)
-        use_tts: Boolean to enable AI voice generation
-        tts_engine: TTS provider instance (ElevenLabsTTS or CartesiaTTS)
-        tts_voice_id: Voice ID to use
-        video_index: Index of current video (for unique filenames)
     """
     
     # Layout coordinates
@@ -313,51 +257,6 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
         text2_y = 1200
         image_text_source_y -= diff
 
-    # Handle AI Voice Generation
-    final_audio_file = audio_file
-    
-    if use_tts and tts_engine and tts_voice_id:
-        try:
-            print(f"\n🎤 Generating AI voice for this video...")
-            
-            # Generate TTS audio
-            tts_audio_path = f"{output_path}/tts_audio/voice_{video_index}.mp3"
-            tts_engine.generate_audio(
-                text=text_verse,
-                voice_id=tts_voice_id,
-                output_path=tts_audio_path
-            )
-            
-            # Get TTS audio duration
-            tts_duration = get_audio_duration(tts_audio_path)
-            print(f"   ✅ AI voice generated ({tts_duration:.1f} seconds)")
-            
-            # Mix TTS with background music
-            print(f"   🎵 Mixing AI voice with background music...")
-            mixed_audio_path = f"{output_path}/tts_audio/mixed_{video_index}.mp3"
-            mix_audio_files(
-                voice_audio=tts_audio_path,
-                background_music=audio_file,
-                output_file=mixed_audio_path,
-                voice_volume=1.0,  # Voice at full volume
-                music_volume=0.15   # Background music at 15% (very quiet)
-            )
-            
-            final_audio_file = mixed_audio_path
-            
-            # Adjust video duration to match audio
-            audio_duration = get_audio_duration(final_audio_file)
-            if abs(video_duration - audio_duration) > 1.0:
-                print(f"   📹 Adjusting video length to match audio...")
-                adjusted_video = f"{output_path}/tts_audio/video_adjusted_{video_index}.mp4"
-                video_file = prepare_video_for_audio(video_file, audio_duration, adjusted_video)
-                video_duration = audio_duration
-            
-        except Exception as e:
-            print(f"   ⚠️ Error generating AI voice: {str(e)}")
-            print(f"   Falling back to background music only...")
-            final_audio_file = audio_file
-
     # Escape special characters for ffmpeg
     text_source = text_source.replace(':', '\\:')
     output_folder = output_path
@@ -369,7 +268,7 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
         ffmpeg_command = (
             f'ffmpeg -loglevel error -stats -y '
             f'-loop 1 -i "{image_file}" '
-            f'-i "{final_audio_file}" '
+            f'-i "{audio_file}" '
             f'-i "{video_file}" '
             f'-i "{created_verse_image}" '
             f'-r 24 -filter_complex '
@@ -388,7 +287,7 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
         # Simplified command WITHOUT logo overlay
         ffmpeg_command = (
             f'ffmpeg -loglevel error -stats -y '
-            f'-i "{final_audio_file}" '
+            f'-i "{audio_file}" '
             f'-i "{video_file}" '
             f'-i "{created_verse_image}" '
             f'-r 24 -filter_complex '
