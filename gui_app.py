@@ -148,22 +148,22 @@ class ShortsMakerGUI(QMainWindow):
             QWidget {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 #2196F3, stop:1 #4CAF50);
-                border-radius: 10px;
-                padding: 15px;
+                border-radius: 5px;
+                padding: 8px;
             }
         """)
         header_layout = QVBoxLayout(header_widget)
         
         header = QLabel("🎬 ShortsMaker Pro with AI Voices")
-        header.setFont(QFont("Arial", 28, QFont.Weight.Bold))
+        header.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         header.setStyleSheet("color: white; background: transparent;")
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(header)
         
+        header_layout.addStretch()
+        
         subtitle = QLabel("Professional Video Creator with AI Voice Generation")
-        subtitle.setFont(QFont("Arial", 12))
+        subtitle.setFont(QFont("Arial", 10))
         subtitle.setStyleSheet("color: white; background: transparent;")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_layout.addWidget(subtitle)
         
         main_layout.addWidget(header_widget)
