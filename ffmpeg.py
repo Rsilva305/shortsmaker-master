@@ -13,11 +13,14 @@ import cv2
 # Import TTS providers
 from providers.elevenlabs_tts import ElevenLabsTTS
 from providers.cartesia_tts import CartesiaTTS
-from utils.audio_utils import get_audio_duration, mix_audio_files, prepare_video_for_audio, add_audio_delay
+from utils.audio_utils import get_audio_duration, mix_voice_and_music, prepare_video_for_audio, prepare_background_music
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
+
+# MINIMUM VIDEO DURATION (in seconds)
+MINIMUM_VIDEO_DURATION = 10.0  # All TTS videos will be at least 10 seconds
 
 
 def create_dirs(output_folder, customer_name, posts=True):
@@ -328,37 +331,37 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
                 output_path=tts_audio_path
             )
             
-            # Get TTS audio duration
-            tts_duration = get_audio_duration(tts_audio_path)
-            print(f"   ✅ AI voice generated ({tts_duration:.1f} seconds)")
+            # Get voice duration
+            voice_duration = get_audio_duration(tts_audio_path)
+            print(f"   ✅ AI voice generated ({voice_duration:.1f} seconds)")
             
-            # Mix TTS with background music
-            print(f"   🎵 Mixing AI voice with background music...")
-            mixed_audio_path = f"{output_path}/tts_audio/mixed_{video_index}.mp3"
-            mix_audio_files(
+            # Calculate total video duration
+            # Voice starts at 1s, so total = 1s + voice_duration + 1.5s ending
+            calculated_duration = 1.0 + voice_duration + 1.5
+            
+            # Enforce minimum duration
+            video_target_duration = max(calculated_duration, MINIMUM_VIDEO_DURATION)
+            
+            print(f"   📏 Target video duration: {video_target_duration:.1f}s (minimum: {MINIMUM_VIDEO_DURATION}s)")
+            
+            # Mix voice + background music
+            # Music starts at 0s, voice starts at 1s
+            mixed_audio_path = f"{output_path}/tts_audio/final_mix_{video_index}.mp3"
+            mix_voice_and_music(
                 voice_audio=tts_audio_path,
                 background_music=audio_file,
                 output_file=mixed_audio_path,
-                voice_volume=1.0,  # Voice at full volume
-                music_volume=0.15   # Background music at 15% (very quiet)
+                video_duration=video_target_duration,
+                voice_delay=1.0,  # Voice starts at 1 second
+                voice_volume=1.0,
+                music_volume=0.15
             )
             
-            # ADD DELAY to sync audio with text appearance (NO FADE!)
-            synced_audio_path = f"{output_path}/tts_audio/synced_{video_index}.mp3"
-            add_audio_delay(
-                input_audio=mixed_audio_path,
-                output_audio=synced_audio_path,
-                delay_seconds=1.0  # Match text_start_time
-            )
+            final_audio_file = mixed_audio_path
             
-            final_audio_file = synced_audio_path
-            
-            # Adjust video duration to match audio + add 0.5s buffer at end
-            audio_duration = get_audio_duration(final_audio_file)
-            video_target_duration = audio_duration + 0.5  # Add 0.5s after audio ends
-            
+            # Adjust video to match target duration
             if abs(video_duration - video_target_duration) > 1.0:
-                print(f"   📹 Adjusting video to {video_target_duration:.1f}s (audio + 0.5s buffer)...")
+                print(f"   📹 Adjusting video to {video_target_duration:.1f}s...")
                 adjusted_video = f"{output_path}/tts_audio/video_adjusted_{video_index}.mp4"
                 video_file = prepare_video_for_audio(video_file, video_target_duration, adjusted_video)
                 video_duration = video_target_duration
@@ -368,17 +371,17 @@ def create_video(text_verse, text_source, text_source_font, text_source_for_imag
             print(f"   Falling back to background music only...")
             final_audio_file = audio_file
     
-    # If NOT using TTS, still add delay to regular audio for consistency
+    # If NOT using TTS, just use background music with fade
     if not use_tts:
         try:
             print(f"\n🎵 Processing background audio...")
-            synced_audio_path = f"{output_path}/tts_audio/synced_bg_{video_index}.mp3"
-            add_audio_delay(
-                input_audio=audio_file,
-                output_audio=synced_audio_path,
-                delay_seconds=1.0
+            processed_audio = f"{output_path}/tts_audio/music_processed_{video_index}.mp3"
+            prepare_background_music(
+                music_file=audio_file,
+                output_file=processed_audio,
+                target_duration=video_duration
             )
-            final_audio_file = synced_audio_path
+            final_audio_file = processed_audio
         except Exception as e:
             print(f"   ⚠️ Could not process audio, using original: {str(e)}")
             final_audio_file = audio_file
