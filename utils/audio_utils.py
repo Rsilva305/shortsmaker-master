@@ -1,5 +1,5 @@
 """
-Audio Utilities - Helper functions for handling audio
+Audio Utilities - Helper functions for handling audio and video sync
 This solves the "audio longer than video" problem!
 """
 
@@ -129,7 +129,8 @@ def loop_video_to_duration(video_file: str, target_duration: float, output_file:
         subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # Clean up the temporary file
-        os.remove(concat_list)
+        if os.path.exists(concat_list):
+            os.remove(concat_list)
         
         print(f"   ✅ Looped video saved to: {output_file}")
         return output_file
@@ -176,27 +177,29 @@ def mix_audio_files(voice_audio: str, background_music: str, output_file: str,
         music_duration = get_audio_duration(background_music)
         
         # If music is shorter than voice, we'll loop it
+        looped_music = None
         if music_duration < voice_duration:
             print(f"   🔄 Looping background music to match voice length...")
             # Calculate how many loops we need
             loops = int(voice_duration / music_duration) + 1
             
             # Create concat file for music
-            music_concat = os.path.join(os.path.dirname(output_file), 'music_concat.txt')
+            music_concat = os.path.join(os.path.dirname(output_file) or '.', 'music_concat.txt')
             with open(music_concat, 'w') as f:
                 for i in range(loops):
                     abs_music_path = os.path.abspath(background_music).replace('\\', '/')
                     f.write(f"file '{abs_music_path}'\n")
             
             # Create looped music
-            looped_music = os.path.join(os.path.dirname(output_file), 'music_looped.mp3')
+            looped_music = os.path.join(os.path.dirname(output_file) or '.', 'music_looped.mp3')
             subprocess.check_call([
                 'ffmpeg', '-f', 'concat', '-safe', '0', '-i', music_concat,
                 '-t', str(voice_duration), '-c', 'copy', '-y', looped_music
             ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             background_music = looped_music
-            os.remove(music_concat)
+            if os.path.exists(music_concat):
+                os.remove(music_concat)
         
         # Mix the audio files
         # This uses ffmpeg's filter_complex to blend the audio
@@ -216,8 +219,8 @@ def mix_audio_files(voice_audio: str, background_music: str, output_file: str,
         subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # Clean up looped music if we created it
-        if 'music_looped.mp3' in background_music and os.path.exists(background_music):
-            os.remove(background_music)
+        if looped_music and os.path.exists(looped_music):
+            os.remove(looped_music)
         
         print(f"   ✅ Mixed audio saved to: {output_file}")
         return output_file
@@ -273,3 +276,43 @@ def prepare_video_for_audio(video_file: str, audio_duration: float, output_file:
         subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print(f"   ✅ Trimmed video saved!")
         return output_file
+
+
+def add_audio_delay(input_audio: str, output_audio: str, delay_seconds: float = 1.0) -> str:
+    """
+    Add silence at the beginning of audio to sync with text appearance
+    NO fade-out - let the speaker finish naturally!
+    
+    Args:
+        input_audio: Path to the original audio file
+        output_audio: Path to save the processed audio
+        delay_seconds: Seconds of silence to add at start (default: 1.0)
+        
+    Returns:
+        Path to the processed audio file
+        
+    Example:
+        add_audio_delay("voice.mp3", "voice_synced.mp3", delay_seconds=1.0)
+        → Creates audio with 1 second silence at start
+    """
+    try:
+        print(f"   ⏱️ Adding {delay_seconds}s delay to sync with text...")
+        
+        # Use ffmpeg to add delay
+        # adelay adds silence at the beginning (in milliseconds)
+        ffmpeg_command = [
+            'ffmpeg',
+            '-i', input_audio,
+            '-af', f'adelay={int(delay_seconds * 1000)}|{int(delay_seconds * 1000)}',
+            '-y',
+            output_audio
+        ]
+        
+        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        print(f"   ✅ Audio synced with {delay_seconds}s delay!")
+        return output_audio
+        
+    except Exception as e:
+        print(f"❌ Error adding delay to audio: {str(e)}")
+        raise
