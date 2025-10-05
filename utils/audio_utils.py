@@ -1,403 +1,306 @@
 """
-Audio Utilities - Helper functions for handling audio and video sync
-This solves the "audio longer than video" problem!
+Audio & Video Utilities — robust, Windows-safe helpers
+Fixes the MP4 concat/copy failures by re-encoding when looping or trimming.
 """
 
 import subprocess
 import os
-from typing import Tuple, List
+import math
+from typing import Tuple
+
+
+def _run(cmd: list) -> None:
+    """
+    Run a subprocess command, raising on failure.
+    Suppresses ffmpeg stdout/stderr noise but keeps clear exceptions.
+    """
+    subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def get_audio_duration(audio_file: str) -> float:
-    """
-    Get the length of an audio file in seconds
-    
-    Args:
-        audio_file: Path to the audio file (MP3, WAV, etc.)
-        
-    Returns:
-        Duration in seconds (like 12.5 seconds)
-        
-    Example:
-        get_audio_duration("audio/verse1.mp3") → 15.3
-    """
+    """Return audio duration in seconds (float)."""
     try:
-        # Use ffprobe to get the duration
-        ffprobe_command = [
-            'ffprobe', 
-            '-i', audio_file,
-            '-show_entries', 'format=duration',
-            '-v', 'quiet',
-            '-of', 'csv=p=0'
-        ]
-        
-        result = subprocess.check_output(ffprobe_command)
-        duration = float(result.decode('utf-8').strip())
-        
-        return duration
-        
+        result = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v", "quiet",
+                "-show_entries", "format=duration",
+                "-of", "csv=p=0",
+                "-i", audio_file,
+            ]
+        )
+        return float(result.decode("utf-8").strip())
     except Exception as e:
-        print(f"❌ Error getting audio duration: {str(e)}")
+        print(f"❌ Error getting audio duration: {e}")
         return 0.0
 
 
 def get_video_duration(video_file: str) -> float:
-    """
-    Get the length of a video file in seconds
-    
-    Args:
-        video_file: Path to the video file (MP4, etc.)
-        
-    Returns:
-        Duration in seconds
-        
-    Example:
-        get_video_duration("videos/nature1.mp4") → 30.0
-    """
+    """Return video duration in seconds (float)."""
     try:
-        # Use ffprobe to get the duration
-        ffprobe_command = [
-            'ffprobe',
-            '-i', video_file,
-            '-show_entries', 'format=duration',
-            '-v', 'quiet',
-            '-of', 'csv=p=0'
-        ]
-        
-        result = subprocess.check_output(ffprobe_command)
-        duration = float(result.decode('utf-8').strip())
-        
-        return duration
-        
+        result = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v", "quiet",
+                "-show_entries", "format=duration",
+                "-of", "csv=p=0",
+                "-i", video_file,
+            ]
+        )
+        return float(result.decode("utf-8").strip())
     except Exception as e:
-        print(f"❌ Error getting video duration: {str(e)}")
+        print(f"❌ Error getting video duration: {e}")
         return 0.0
+
+
+def _loop_video_stream_loop(video_file: str, target_duration: float, output_file: str) -> None:
+    """
+    Loop a video using -stream_loop (re-encode). Works reliably with MP4.
+    - Removes source audio (-an) so we can add our own later.
+    - Re-encodes with H.264/yuv420p for maximum compatibility.
+    """
+    original = max(get_video_duration(video_file), 0.0001)
+    # stream_loop counts *extra* plays; compute exact number of extras needed
+    extras = max(math.ceil(target_duration / original) - 1, 0)
+
+    # If extras is large, we can still set -t to cap precisely at target_duration
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-stream_loop", str(extras),
+        "-i", video_file,
+        "-t", f"{target_duration:.3f}",
+        "-an",
+        "-r", "30",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-movflags", "+faststart",
+        output_file,
+    ]
+    _run(cmd)
+
+
+def _concat_filter_fallback(video_file: str, target_duration: float, output_file: str) -> None:
+    """
+    Fallback: duplicate the same input twice via filtergraph concat (re-encode),
+    then trim to exact target. This avoids demuxer + copy pitfalls.
+    """
+    # We build: [0:v]split=2[v0][v1]; [v0][v1]concat=n=2:v=1:a=0[cat]
+    filtergraph = (
+        "[0:v]split=2[v0][v1];"
+        "[v0][v1]concat=n=2:v=1:a=0[cat]"
+    )
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", video_file,
+        "-filter_complex", filtergraph,
+        "-map", "[cat]",
+        "-t", f"{target_duration:.3f}",
+        "-an",
+        "-r", "30",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-movflags", "+faststart",
+        output_file,
+    ]
+    _run(cmd)
 
 
 def loop_video_to_duration(video_file: str, target_duration: float, output_file: str) -> str:
     """
-    Loop a video to match a target duration
-    
-    This solves: "Audio is 45 seconds, but video is only 30 seconds"
-    Solution: Loop the video to make it 45+ seconds
-    
-    Args:
-        video_file: Original video file
-        target_duration: How long you need it to be (in seconds)
-        output_file: Where to save the looped video
-        
-    Returns:
-        Path to the looped video
-        
-    Example:
-        loop_video_to_duration("nature.mp4", 45.0, "nature_looped.mp4")
-        → Creates a 45-second video by looping nature.mp4
+    Loop video to at least target_duration seconds, then cap to target.
+    Robust on Windows/MP4. Always strips source audio (-an).
     """
     try:
-        # Get how long the original video is
-        original_duration = get_video_duration(video_file)
-        
-        if original_duration == 0:
-            raise Exception("Could not get video duration")
-        
-        # Calculate how many times we need to loop
-        times_to_loop = int(target_duration / original_duration) + 1
-        
-        print(f"🔄 Looping video {times_to_loop} times to reach {target_duration:.1f} seconds...")
-        
-        # Create the ffmpeg command to loop the video
-        concat_list = os.path.join(os.path.dirname(output_file), 'concat_list.txt')
-        with open(concat_list, 'w') as f:
-            for i in range(times_to_loop):
-                abs_video_path = os.path.abspath(video_file).replace('\\', '/')
-                f.write(f"file '{abs_video_path}'\n")
-        
-        # Use ffmpeg to concatenate the video with itself
-        ffmpeg_command = [
-            'ffmpeg',
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', concat_list,
-            '-t', str(target_duration),
-            '-c', 'copy',
-            '-y',
-            output_file
-        ]
-        
-        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        if os.path.exists(concat_list):
-            os.remove(concat_list)
-        
-        print(f"   ✅ Looped video saved to: {output_file}")
+        print(f"🔄 Looping video to reach {target_duration:.1f} seconds...")
+        try:
+            _loop_video_stream_loop(video_file, target_duration, output_file)
+        except Exception:
+            # If -stream_loop is not available or fails, use filter fallback
+            _concat_filter_fallback(video_file, target_duration, output_file)
+
+        print("   ✅ Looped video saved (audio removed for clean mixing)")
         return output_file
-        
+
     except Exception as e:
-        print(f"❌ Error looping video: {str(e)}")
+        print(f"❌ Error looping video: {e}")
         raise
 
 
-def pad_audio_with_silence(input_audio: str, output_audio: str, 
-                           start_delay: float, total_duration: float) -> str:
+def mix_voice_and_music(
+    voice_audio: str,
+    background_music: str,
+    output_file: str,
+    video_duration: float,
+    voice_delay: float = 1.0,
+    voice_volume: float = 1.0,
+    music_volume: float = 0.15,
+) -> str:
     """
-    Pad audio with silence before and after to match target duration
-    
-    This ensures the voice audio is the same length as the video/music
-    
-    Args:
-        input_audio: Original audio file
-        output_audio: Where to save padded audio
-        start_delay: Seconds of silence at the beginning
-        total_duration: Total duration of output
-        
-    Returns:
-        Path to the padded audio
-        
-    Example:
-        Voice is 5 seconds, we want it to start at 1s in a 10s video:
-        pad_audio_with_silence("voice.mp3", "padded.mp3", start_delay=1.0, total_duration=10.0)
-        Result: 1s silence + 5s voice + 4s silence = 10s total
+    Mix AI voice with background music:
+      - Music starts immediately
+      - Voice starts after voice_delay
+      - Music fades out in the last 1.5 s
+    Outputs exactly video_duration seconds.
     """
     try:
-        voice_duration = get_audio_duration(input_audio)
-        
-        # Calculate padding needed
-        # total = start_delay + voice_duration + end_padding
-        # So: end_padding = total - start_delay - voice_duration
-        
-        print(f"   🔇 Padding audio: {start_delay}s silence before, total {total_duration}s")
-        
-        # Use ffmpeg to add silence padding
-        # adelay adds silence at start
-        # then we pad the end to reach total duration
-        ffmpeg_command = [
-            'ffmpeg',
-            '-i', input_audio,
-            '-af', f'adelay={int(start_delay * 1000)}|{int(start_delay * 1000)},apad=whole_dur={int(total_duration * 1000)}ms',
-            '-y',
-            output_audio
-        ]
-        
-        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        print(f"   ✅ Padded audio created ({total_duration}s total)")
-        return output_audio
-        
-    except Exception as e:
-        print(f"❌ Error padding audio: {str(e)}")
-        raise
-
-
-def mix_voice_and_music(voice_audio: str, background_music: str, output_file: str,
-                        video_duration: float, voice_delay: float = 1.0,
-                        voice_volume: float = 1.0, music_volume: float = 0.15) -> str:
-    """
-    Mix AI voice with background music - PROPERLY!
-    
-    Music starts immediately, voice starts after delay, music fades at end.
-    Both streams are same length for reliable mixing!
-    
-    Args:
-        voice_audio: Path to the AI voice audio
-        background_music: Path to the background music
-        output_file: Where to save the mixed audio
-        video_duration: Total duration of the video
-        voice_delay: Seconds to delay the voice (default: 1.0)
-        voice_volume: Volume of the voice (0.0 to 1.0, default: 1.0)
-        music_volume: Volume of the music (0.0 to 1.0, default: 0.15)
-        
-    Returns:
-        Path to the mixed audio file
-    """
-    try:
-        print(f"🎵 Mixing voice and background music (smart sync)...")
+        print("🎵 Mixing voice and background music (smart sync)...")
         print(f"   Voice starts at: {voice_delay}s (synced with text)")
-        print(f"   Music starts at: 0s (immediate)")
+        print("   Music starts at: 0s (immediate)")
         print(f"   Total duration: {video_duration:.1f}s")
-        
-        voice_duration = get_audio_duration(voice_audio)
-        music_duration = get_audio_duration(background_music)
-        
-        # Step 1: Pad voice to match video duration (with delay at start)
-        padded_voice = os.path.join(os.path.dirname(output_file) or '.', 'voice_padded.mp3')
-        pad_audio_with_silence(
-            input_audio=voice_audio,
-            output_audio=padded_voice,
-            start_delay=voice_delay,
-            total_duration=video_duration
-        )
-        
-        # Step 2: Prepare music (loop if needed, trim to video duration, add fade)
-        prepared_music = os.path.join(os.path.dirname(output_file) or '.', 'music_prepared.mp3')
-        
-        # Loop music if needed
-        if music_duration < video_duration:
-            loops_needed = int(video_duration / music_duration) + 1
-            print(f"   🔄 Looping background music {loops_needed} times...")
-            
-            music_concat = os.path.join(os.path.dirname(output_file) or '.', 'music_concat.txt')
-            with open(music_concat, 'w') as f:
-                for i in range(loops_needed):
-                    abs_music_path = os.path.abspath(background_music).replace('\\', '/')
-                    f.write(f"file '{abs_music_path}'\n")
-            
-            looped_music = os.path.join(os.path.dirname(output_file) or '.', 'music_looped.mp3')
-            subprocess.check_call([
-                'ffmpeg', '-f', 'concat', '-safe', '0', '-i', music_concat,
-                '-t', str(video_duration), '-c', 'copy', '-y', looped_music
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            background_music = looped_music
-            if os.path.exists(music_concat):
-                os.remove(music_concat)
-        
-        # Add fade to music at end
-        fade_start = video_duration - 1.5
-        
-        subprocess.check_call([
-            'ffmpeg',
-            '-i', background_music,
-            '-af', f'volume={music_volume},afade=t=out:st={fade_start}:d=1.5',
-            '-t', str(video_duration),
-            '-y',
-            prepared_music
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Step 3: Mix the two streams (both are now same length!)
-        ffmpeg_command = [
-            'ffmpeg',
-            '-i', prepared_music,      # Music (full video duration with fade)
-            '-i', padded_voice,         # Voice (full video duration with delay built-in)
-            '-filter_complex',
-            f'[0:a]volume=1.0[music];'  # Music already has volume applied
-            f'[1:a]volume={voice_volume}[voice];'
-            f'[music][voice]amix=inputs=2:duration=first',  # Both same length, so this is safe
-            '-t', str(video_duration),
-            '-y',
-            output_file
+
+        # 1) Pad the voice to full length: [silence_before] + voice + [silence_after] = video_duration
+        padded_voice = os.path.join(os.path.dirname(output_file) or ".", "voice_padded.mp3")
+
+        pad_cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", voice_audio,
+            "-af", f"adelay={int(voice_delay*1000)}|{int(voice_delay*1000)},apad=whole_dur={video_duration}",
+            "-t", f"{video_duration:.3f}",
+            padded_voice,
         ]
-        
-        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Clean up temp files
-        for temp_file in [padded_voice, prepared_music]:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-        
-        if 'music_looped.mp3' in background_music and os.path.exists(background_music):
-            os.remove(background_music)
-        
+        _run(pad_cmd)
+        print(f"   🔇 Padded audio created ({video_duration:.1f}s total)")
+
+        # 2) Ensure background music covers full duration (loop by concat demuxer is fine for MP3)
+        music_duration = get_audio_duration(background_music)
+        music_full = background_music
+        if music_duration < video_duration:
+            loops = max(math.ceil(video_duration / max(music_duration, 0.0001)), 1)
+            concat_list = os.path.join(os.path.dirname(output_file) or ".", "music_concat.txt")
+            with open(concat_list, "w", encoding="utf-8") as f:
+                abs_music = os.path.abspath(background_music).replace("\\", "/")
+                for _ in range(loops):
+                    f.write(f"file '{abs_music}'\n")
+
+            music_full = os.path.join(os.path.dirname(output_file) or ".", "music_looped.mp3")
+            _run([
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0", "-i", concat_list,
+                "-t", f"{video_duration:.3f}",
+                "-c", "copy",
+                music_full
+            ])
+            if os.path.exists(concat_list):
+                os.remove(concat_list)
+
+        # 3) Fade music at end, mix with padded voice to exact duration
+        fade_start = max(video_duration - 1.5, 0.0)
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", music_full,
+            "-i", padded_voice,
+            "-filter_complex",
+            f"[0:a]volume={music_volume},afade=t=out:st={fade_start:.3f}:d=1.5[m];"
+            f"[1:a]volume={voice_volume}[v];"
+            f"[m][v]amix=inputs=2:duration=first:dropout_transition=0",
+            "-t", f"{video_duration:.3f}",
+            output_file,
+        ]
+        _run(cmd)
+
+        # cleanup
+        if os.path.exists(padded_voice):
+            os.remove(padded_voice)
+        if music_full.endswith("music_looped.mp3") and os.path.exists(music_full):
+            os.remove(music_full)
+
         print(f"   ✅ Perfect mix! Music plays throughout, voice starts at {voice_delay}s")
         return output_file
-        
+
     except Exception as e:
-        print(f"❌ Error mixing audio: {str(e)}")
+        print(f"❌ Error mixing audio: {e}")
         raise
 
 
 def prepare_background_music(music_file: str, output_file: str, target_duration: float) -> str:
     """
-    Prepare background music for the full video duration with fade at end
-    
-    Args:
-        music_file: Original music file
-        output_file: Where to save processed music
-        target_duration: How long the video will be
-        
-    Returns:
-        Path to the processed music
+    Make background music exactly target_duration with a 1.5 s fade out.
     """
     try:
         music_duration = get_audio_duration(music_file)
-        
-        # Loop if needed
+        music_full = music_file
+
         if music_duration < target_duration:
-            loops_needed = int(target_duration / music_duration) + 1
-            
-            music_concat = os.path.join(os.path.dirname(output_file) or '.', 'music_concat.txt')
-            with open(music_concat, 'w') as f:
-                for i in range(loops_needed):
-                    abs_music_path = os.path.abspath(music_file).replace('\\', '/')
-                    f.write(f"file '{abs_music_path}'\n")
-            
-            looped_music = os.path.join(os.path.dirname(output_file) or '.', 'music_temp.mp3')
-            subprocess.check_call([
-                'ffmpeg', '-f', 'concat', '-safe', '0', '-i', music_concat,
-                '-t', str(target_duration), '-c', 'copy', '-y', looped_music
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            music_file = looped_music
-            if os.path.exists(music_concat):
-                os.remove(music_concat)
-        
-        # Add fade at end
-        fade_start = target_duration - 1.5
-        
-        ffmpeg_command = [
-            'ffmpeg',
-            '-i', music_file,
-            '-af', f'afade=t=out:st={fade_start}:d=1.5',
-            '-t', str(target_duration),
-            '-y',
+            loops = max(math.ceil(target_duration / max(music_duration, 0.0001)), 1)
+            concat_list = os.path.join(os.path.dirname(output_file) or ".", "music_concat.txt")
+            with open(concat_list, "w", encoding="utf-8") as f:
+                abs_music = os.path.abspath(music_file).replace("\\", "/")
+                for _ in range(loops):
+                    f.write(f"file '{abs_music}'\n")
+
+            music_full = os.path.join(os.path.dirname(output_file) or ".", "music_temp.mp3")
+            _run([
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0", "-i", concat_list,
+                "-t", f"{target_duration:.3f}",
+                "-c", "copy",
+                music_full
+            ])
+            if os.path.exists(concat_list):
+                os.remove(concat_list)
+
+        fade_start = max(target_duration - 1.5, 0.0)
+        _run([
+            "ffmpeg", "-y",
+            "-i", music_full,
+            "-af", f"afade=t=out:st={fade_start:.3f}:d=1.5",
+            "-t", f"{target_duration:.3f}",
             output_file
-        ]
-        
-        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-        # Clean up temp file
-        if 'music_temp.mp3' in music_file and os.path.exists(music_file):
-            os.remove(music_file)
-        
+        ])
+
+        if music_full.endswith("music_temp.mp3") and os.path.exists(music_full):
+            os.remove(music_full)
+
         return output_file
-        
+
     except Exception as e:
-        print(f"❌ Error preparing background music: {str(e)}")
+        print(f"❌ Error preparing background music: {e}")
         raise
 
 
 def prepare_video_for_audio(video_file: str, audio_duration: float, output_file: str) -> str:
     """
-    Prepare a video to match audio length
-    
-    This is the SMART function that decides what to do:
-    - If video is shorter: Loop it
-    - If video is longer: Trim it
-    - If they're close: Use as-is
-    
-    Args:
-        video_file: Original video
-        audio_duration: How long the audio is
-        output_file: Where to save the adjusted video
-        
-    Returns:
-        Path to the adjusted video
+    Make video duration match audio_duration:
+      - If shorter: loop (re-encode, -an)
+      - If longer: trim (re-encode, -an)
+      - If close (±1.0 s): leave as-is
     """
     video_duration = get_video_duration(video_file)
-    
-    # If they're within 1 second, don't bother adjusting
+
     if abs(video_duration - audio_duration) < 1.0:
         print("   ✅ Video and audio lengths are close enough!")
         return video_file
-    
-    # If video is shorter, loop it
+
     if video_duration < audio_duration:
         print(f"   📹 Video ({video_duration:.1f}s) is shorter than target ({audio_duration:.1f}s)")
         return loop_video_to_duration(video_file, audio_duration, output_file)
-    
-    # If video is longer, trim it
-    else:
-        print(f"   ✂️ Video ({video_duration:.1f}s) is longer than target ({audio_duration:.1f}s)")
-        print(f"   Trimming video to {audio_duration:.1f} seconds...")
-        
-        ffmpeg_command = [
-            'ffmpeg',
-            '-i', video_file,
-            '-t', str(audio_duration),
-            '-c', 'copy',
-            '-y',
-            output_file
-        ]
-        
-        subprocess.check_call(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"   ✅ Trimmed video saved!")
-        return output_file
+
+    # Longer → trim (re-encode; still -an so we can add our mixed track later)
+    print(f"   ✂️ Video ({video_duration:.1f}s) is longer than target ({audio_duration:.1f}s)")
+    print(f"   Trimming video to {audio_duration:.1f} seconds...")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i", video_file,
+        "-t", f"{audio_duration:.3f}",
+        "-an",
+        "-r", "30",
+        "-pix_fmt", "yuv420p",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "18",
+        "-movflags", "+faststart",
+        output_file,
+    ]
+    _run(cmd)
+    print("   ✅ Trimmed video saved (audio removed for clean mixing)")
+    return output_file
