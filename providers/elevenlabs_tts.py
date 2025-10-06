@@ -91,10 +91,14 @@ class ElevenLabsTTS(BaseTTSProvider):
             
             voices_list = []
             for voice in voices_response.voices:
+                # Categorize voices based on name and description
+                category = self.categorize_voice(voice.name, voice.description or "")
+                
                 voices_list.append({
                     'id': voice.voice_id,
                     'name': voice.name,
-                    'description': voice.description if voice.description else f"{voice.name} voice"
+                    'description': voice.description if voice.description else f"{voice.name} voice",
+                    'category': category
                 })
             
             return voices_list
@@ -103,9 +107,59 @@ class ElevenLabsTTS(BaseTTSProvider):
             print(f"❌ Error getting voices: {str(e)}")
             # Return some common default voices if we can't get the list
             return [
-                {'id': 'EXAVITQu4vr4xnSDxMaL', 'name': 'Rachel', 'description': 'Calm, warm female voice'},
-                {'id': 'pNInz6obpgDQGcFmaJgB', 'name': 'Adam', 'description': 'Deep, authoritative male voice'},
+                {'id': 'EXAVITQu4vr4xnSDxMaL', 'name': 'Rachel', 'description': 'Calm, warm female voice', 'category': 'Female'},
+                {'id': 'pNInz6obpgDQGcFmaJgB', 'name': 'Adam', 'description': 'Deep, authoritative male voice', 'category': 'Male'},
             ]
+    
+    def categorize_voice(self, name: str, description: str) -> str:
+        """
+        Categorize a voice based on its name and description
+        
+        Args:
+            name: Voice name
+            description: Voice description
+            
+        Returns:
+            Category string (Male, Female, Custom, etc.)
+        """
+        # Convert to lowercase for easier matching
+        name_lower = name.lower()
+        desc_lower = description.lower()
+        
+        # Check for custom voices (usually have specific patterns)
+        if any(keyword in desc_lower for keyword in ['custom', 'cloned', 'personal', 'your voice']):
+            return 'Custom'
+        
+        # Check for female voices
+        if any(keyword in desc_lower for keyword in ['female', 'woman', 'girl', 'lady', 'she', 'her']):
+            return 'Female'
+        if any(keyword in name_lower for keyword in ['rachel', 'sarah', 'emma', 'jessica', 'lily', 'aria', 'nova', 'shimmer']):
+            return 'Female'
+        
+        # Check for male voices
+        if any(keyword in desc_lower for keyword in ['male', 'man', 'boy', 'gentleman', 'he', 'his', 'masculine']):
+            return 'Male'
+        if any(keyword in name_lower for keyword in ['adam', 'drew', 'josh', 'sam', 'daniel', 'michael', 'james', 'alex', 'charlie']):
+            return 'Male'
+        
+        # Check for child voices
+        if any(keyword in desc_lower for keyword in ['child', 'kid', 'young', 'teen', 'youth']):
+            return 'Child'
+        
+        # Check for elderly voices
+        if any(keyword in desc_lower for keyword in ['elderly', 'old', 'senior', 'mature', 'aged']):
+            return 'Elderly'
+        
+        # Check for accent-based categories
+        if any(keyword in desc_lower for keyword in ['british', 'uk', 'england', 'scottish', 'irish', 'australian']):
+            return 'British'
+        if any(keyword in desc_lower for keyword in ['spanish', 'mexican', 'latin', 'hispanic']):
+            return 'Spanish'
+        if any(keyword in desc_lower for keyword in ['french', 'german', 'italian', 'european']):
+            return 'European'
+        
+        # Default to Male if we can't determine
+        return 'Male'
     
     def estimate_duration(self, text: str) -> float:
         """
