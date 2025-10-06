@@ -1,0 +1,22 @@
+{
+    "pack_name": "Love",
+    "category": "Bible",
+    "subcategory": "Love",
+    "description": "Bible verses about love and God's love with scripture references",
+    "tags": ["love", "charity", "bible", "scripture", "God"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

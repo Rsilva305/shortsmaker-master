@@ -1,0 +1,22 @@
+{
+    "pack_name": "Courage",
+    "category": "Bible",
+    "subcategory": "Courage",
+    "description": "Bible verses about courage and strength with scripture references",
+    "tags": ["courage", "strength", "bible", "scripture", "boldness"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

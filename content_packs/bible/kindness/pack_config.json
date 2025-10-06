@@ -1,0 +1,22 @@
+{
+    "pack_name": "Kindness",
+    "category": "Bible",
+    "subcategory": "Kindness",
+    "description": "Bible verses about kindness and compassion with scripture references",
+    "tags": ["kindness", "compassion", "love", "bible", "scripture"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

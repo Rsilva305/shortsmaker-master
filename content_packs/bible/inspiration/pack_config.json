@@ -1,0 +1,22 @@
+{
+    "pack_name": "Inspiration",
+    "category": "Bible",
+    "subcategory": "Inspiration",
+    "description": "Inspirational Bible verses with scripture references",
+    "tags": ["inspiration", "encouragement", "bible", "scripture", "hope"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

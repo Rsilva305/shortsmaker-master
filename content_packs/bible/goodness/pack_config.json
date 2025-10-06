@@ -1,0 +1,22 @@
+{
+    "pack_name": "Goodness",
+    "category": "Bible",
+    "subcategory": "Goodness",
+    "description": "Bible verses about goodness and God's goodness with scripture references",
+    "tags": ["goodness", "kindness", "bible", "scripture", "God"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

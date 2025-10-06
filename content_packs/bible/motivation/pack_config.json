@@ -1,0 +1,22 @@
+{
+    "pack_name": "Motivation",
+    "category": "Bible",
+    "subcategory": "Motivation",
+    "description": "Motivational Bible verses with scripture references",
+    "tags": ["motivation", "encouragement", "bible", "scripture", "strength"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

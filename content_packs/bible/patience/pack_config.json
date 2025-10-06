@@ -1,0 +1,22 @@
+{
+    "pack_name": "Patience",
+    "category": "Bible",
+    "subcategory": "Patience",
+    "description": "Bible verses about patience and perseverance with scripture references",
+    "tags": ["patience", "perseverance", "endurance", "bible", "scripture"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

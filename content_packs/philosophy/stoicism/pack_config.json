@@ -1,0 +1,24 @@
+{
+    "pack_name": "Stoicism - Marcus Aurelius",
+    "category": "Philosophy",
+    "subcategory": "Stoicism",
+    "description": "Stoic philosophy quotes from Marcus Aurelius, Roman Emperor and philosopher",
+    "tags": ["stoicism", "philosophy", "marcus aurelius", "wisdom", "virtue"],
+    
+    "content": {
+        "auto_detect": true
+    },
+    
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/inspiring",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/reflective",
+            "library/audio/generic"
+        ]
+    }
+}

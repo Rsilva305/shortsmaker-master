@@ -1,0 +1,22 @@
+{
+    "pack_name": "Peace",
+    "category": "Bible",
+    "subcategory": "Peace",
+    "description": "Bible verses about peace and serenity with scripture references",
+    "tags": ["peace", "serenity", "calm", "bible", "scripture"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}

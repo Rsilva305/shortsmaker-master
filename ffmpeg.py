@@ -42,10 +42,11 @@ def create_dirs(output_folder, customer_name, posts=True):
     return output_path
 
 
-def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folder, 
+def create_videos(video_folder, audio_folder, fonts_dir, output_folder, 
                   text_source_font, image_file: str, customer_name, number_of_videos, 
                   fonts: Fonts, posts=False, progress_callback=None, use_logo=True,
-                  use_tts=False, tts_provider=None, tts_voice_id=None):
+                  use_tts=False, tts_provider=None, tts_voice_id=None,
+                  content_pack=None, randomize=True, json_file=None):
     """
     Create multiple videos with progress tracking and optional AI voices
     
@@ -55,6 +56,9 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
         use_tts: Boolean to enable AI voice generation (default: False)
         tts_provider: Which TTS provider to use ('elevenlabs' or 'cartesia')
         tts_voice_id: Voice ID to use for TTS
+        content_pack: ContentPack object with resources (NEW!)
+        randomize: Boolean to enable quote randomization (NEW!)
+        json_file: Legacy JSON file path (fallback)
     """
     # Initialize TTS provider if needed
     tts_engine = None
@@ -79,10 +83,34 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
                 tts_engine = CartesiaTTS(api_key=api_key)
                 print(f"✅ Cartesia TTS initialized!")
     
-    # Load content data
-    json_data = json_handler.get_data(json_file)
-    verses: str = json_data[0]
-    refs: str = json_data[1]
+    # Load content from content pack (NEW WAY!)
+    if content_pack:
+        # Get quotes from the pack with randomization!
+        verses, refs = content_pack.get_quotes_and_references(
+            randomize=randomize,
+            count=number_of_videos
+        )
+        print(f"📦 Using content pack: {content_pack.get_display_name()}")
+        print(f"🎲 Randomization: {'ON' if randomize else 'OFF'}")
+    else:
+        # Fallback to old method (if no pack selected)
+        print("⚠️ No content pack selected, using legacy method")
+        if json_file:
+            json_data = json_handler.get_data(json_file)
+            verses = json_data[0]
+            refs = json_data[1]
+        else:
+            print("❌ Error: No content source provided!")
+            return
+        
+        # Apply randomization manually if enabled
+        if randomize:
+            import random
+            combined = list(zip(verses, refs))
+            random.shuffle(combined)
+            verses, refs = zip(*combined) if combined else ([], [])
+            verses = list(verses)
+            refs = list(refs)
 
     # Validate number of videos
     if number_of_videos == -1:
@@ -103,14 +131,24 @@ def create_videos(video_folder, audio_folder, json_file, fonts_dir, output_folde
     audios_num = list()
     fonts_num = list()
 
-    # Get lists of files
-    video_files = [f"{video_folder}/{file}" for file in os.listdir(video_folder) if file.endswith(".mp4")]
-    audio_files = [f"{audio_folder}/{file}" for file in os.listdir(audio_folder) if file.endswith(".mp3")]
+    # Get video and audio files from the pack (NEW!)
+    if content_pack:
+        # Get files from pack's library folders
+        video_files = content_pack.get_video_files()
+        audio_files = content_pack.get_audio_files()
+        
+        print(f"\n📦 Using content pack resources:")
+        print(f"   🎥 {len(video_files)} videos available")
+        print(f"   🎵 {len(audio_files)} audio files available")
+    else:
+        # Fallback to folder scanning (old method)
+        video_files = [f"{video_folder}/{file}" for file in os.listdir(video_folder) if file.endswith(".mp4")]
+        audio_files = [f"{audio_folder}/{file}" for file in os.listdir(audio_folder) if file.endswith(".mp3")]
     
     if not video_files:
-        raise Exception(f"No MP4 video files found in {video_folder}")
+        raise Exception(f"No MP4 video files found!")
     if not audio_files:
-        raise Exception(f"No MP3 audio files found in {audio_folder}")
+        raise Exception(f"No MP3 audio files found!")
     
     # Create random but distributed selections
     random_for_video = random.randint(0, len(video_files) - 1)

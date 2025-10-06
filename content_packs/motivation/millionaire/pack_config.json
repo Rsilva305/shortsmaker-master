@@ -1,0 +1,24 @@
+{
+    "pack_name": "Millionaire Mindset",
+    "category": "Motivation",
+    "subcategory": "Millionaire",
+    "description": "Wealth and success mindset quotes",
+    "tags": ["money", "wealth", "success", "millionaire", "motivation"],
+    
+    "content": {
+        "quotes_file": "library/quotes/motivation_millionaire.json"
+    },
+    
+    "resources": {
+        "video_folders": [
+            "library/videos/luxury",
+            "library/videos/urban",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/luxury",
+            "library/audio/dramatic",
+            "library/audio/generic"
+        ]
+    }
+}

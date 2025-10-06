@@ -1,0 +1,23 @@
+{
+    "pack_name": "Gym Motivation",
+    "category": "Motivation",
+    "subcategory": "Gym",
+    "description": "High-energy workout motivation quotes",
+    "tags": ["fitness", "gym", "workout", "bodybuilding", "motivation"],
+    
+    "content": {
+        "quotes_file": "library/quotes/motivation_gym.json"
+    },
+    
+    "resources": {
+        "video_folders": [
+            "library/videos/gym",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/gym",
+            "library/audio/dramatic",
+            "library/audio/generic"
+        ]
+    }
+}

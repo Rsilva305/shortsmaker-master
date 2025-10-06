@@ -1,0 +1,22 @@
+{
+    "pack_name": "Faith",
+    "category": "Motivation",
+    "subcategory": "Faith",
+    "description": "Inspirational quotes about faith from famous people and leaders",
+    "tags": ["faith", "motivation", "inspiration", "quotes", "belief"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/inspiring",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/uplifting",
+            "library/audio/energetic",
+            "library/audio/generic"
+        ]
+    }
+}

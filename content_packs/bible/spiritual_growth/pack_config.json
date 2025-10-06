@@ -1,0 +1,22 @@
+{
+    "pack_name": "Spiritual Growth",
+    "category": "Bible",
+    "subcategory": "Spiritual Growth",
+    "description": "Bible verses about spiritual growth and maturity with scripture references",
+    "tags": ["spiritual growth", "discipleship", "maturity", "bible", "scripture"],
+    "content": {
+        "auto_detect": true
+    },
+    "resources": {
+        "video_folders": [
+            "library/videos/nature",
+            "library/videos/spiritual",
+            "library/videos/generic"
+        ],
+        "audio_folders": [
+            "library/audio/calm",
+            "library/audio/uplifting",
+            "library/audio/generic"
+        ]
+    }
+}
