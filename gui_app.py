@@ -210,6 +210,25 @@ class ShortsMakerGUI(QMainWindow):
         provider_layout.addStretch()
         tts_controls_layout.addLayout(provider_layout)
         
+        # Add manual voice ID input for ElevenLabs
+        voice_id_layout = QHBoxLayout()
+        voice_id_label = QLabel("ElevenLabs Voice ID:")
+        voice_id_label.setStyleSheet("color: #333333; font-weight: bold;")
+        voice_id_layout.addWidget(voice_id_label)
+        
+        self.voice_id_input = QLineEdit()
+        self.voice_id_input.setPlaceholderText("Enter ElevenLabs voice ID (e.g., 21m00Tcm4TlvDq8ikWAM)")
+        self.voice_id_input.setStyleSheet("color: #333333; background-color: white; padding: 8px; border: 1px solid #ddd; border-radius: 4px;")
+        self.voice_id_input.setMinimumWidth(300)
+        voice_id_layout.addWidget(self.voice_id_input)
+        
+        self.use_voice_id_checkbox = QCheckBox("Use Manual Voice ID")
+        self.use_voice_id_checkbox.setStyleSheet("color: #333333; font-weight: bold;")
+        self.use_voice_id_checkbox.stateChanged.connect(self.toggle_voice_selection)
+        voice_id_layout.addWidget(self.use_voice_id_checkbox)
+        voice_id_layout.addStretch()
+        tts_controls_layout.addLayout(voice_id_layout)
+        
         api_key_layout = QHBoxLayout()
         api_key_label = QLabel("API Key Status:")
         api_key_label.setStyleSheet("color: #333333;")
@@ -221,6 +240,21 @@ class ShortsMakerGUI(QMainWindow):
         api_key_layout.addStretch()
         tts_controls_layout.addLayout(api_key_layout)
         
+        # Voice category selection
+        category_layout = QHBoxLayout()
+        category_label = QLabel("Voice Category:")
+        category_label.setStyleSheet("color: #333333; font-weight: bold;")
+        category_layout.addWidget(category_label)
+        
+        self.voice_category_combo = QComboBox()
+        self.voice_category_combo.setStyleSheet("color: #333333; background-color: white;")
+        self.voice_category_combo.setMinimumWidth(150)
+        self.voice_category_combo.currentTextChanged.connect(self.on_voice_category_changed)
+        category_layout.addWidget(self.voice_category_combo)
+        category_layout.addStretch()
+        tts_controls_layout.addLayout(category_layout)
+        
+        # Voice selection
         voice_layout = QHBoxLayout()
         voice_label = QLabel("Select Voice:")
         voice_label.setStyleSheet("color: #333333; font-weight: bold;")
@@ -228,8 +262,20 @@ class ShortsMakerGUI(QMainWindow):
         
         self.voice_combo = QComboBox()
         self.voice_combo.setStyleSheet("color: #333333; background-color: white;")
-        self.voice_combo.setMinimumWidth(300)
+        self.voice_combo.setMinimumWidth(200)
+        self.voice_combo.setToolTip("Select a voice - click ℹ️ for details and voice ID")
         voice_layout.addWidget(self.voice_combo)
+        
+        self.voice_info_btn = QPushButton("ℹ️")
+        self.voice_info_btn.setMaximumWidth(30)
+        self.voice_info_btn.setToolTip("View voice description and details")
+        self.voice_info_btn.setStyleSheet("""
+            QPushButton { background-color: #4CAF50; color: white; padding: 5px; border-radius: 3px; font-weight: bold; }
+            QPushButton:hover { background-color: #45a049; }
+            QPushButton:disabled { background-color: #cccccc; color: #666666; }
+        """)
+        self.voice_info_btn.clicked.connect(self.show_voice_info)
+        voice_layout.addWidget(self.voice_info_btn)
         
         self.test_voice_btn = QPushButton("🔊 Test Voice")
         self.test_voice_btn.setStyleSheet("""
@@ -246,6 +292,13 @@ class ShortsMakerGUI(QMainWindow):
         info_label.setStyleSheet("color: #666; font-style: italic; padding: 10px; background-color: #f0f8ff; border-radius: 4px;")
         info_label.setWordWrap(True)
         tts_controls_layout.addWidget(info_label)
+        
+        # Add ElevenLabs-specific info
+        self.elevenlabs_info_label = QLabel("🔑 ElevenLabs: Choose category → Select voice → Click ℹ️ for details & copyable voice ID → Test voice")
+        self.elevenlabs_info_label.setStyleSheet("color: #4CAF50; font-style: italic; padding: 8px; background-color: #e8f5e9; border-radius: 4px; border: 1px solid #4CAF50;")
+        self.elevenlabs_info_label.setWordWrap(True)
+        self.elevenlabs_info_label.hide()  # Initially hidden
+        tts_controls_layout.addWidget(self.elevenlabs_info_label)
         
         tts_layout.addWidget(self.tts_controls_widget)
         tts_group.setLayout(tts_layout)
@@ -289,6 +342,25 @@ class ShortsMakerGUI(QMainWindow):
         else:
             self.status_label.setText("✅ Ready to create videos (without AI voices)")
     
+    def toggle_voice_selection(self, state):
+        """Toggle between manual voice ID input and voice dropdown selection"""
+        use_manual = (state == 2)
+        
+        if use_manual:
+            # Hide voice dropdown, show manual input
+            self.voice_combo.setEnabled(False)
+            self.voice_combo.setStyleSheet("color: #999; background-color: #f0f0f0;")
+            self.voice_id_input.setEnabled(True)
+            self.voice_id_input.setStyleSheet("color: #333333; background-color: white; padding: 8px; border: 1px solid #ddd; border-radius: 4px;")
+            self.status_label.setText("🎤 Manual Voice ID mode - Enter your ElevenLabs voice ID")
+        else:
+            # Show voice dropdown, hide manual input
+            self.voice_combo.setEnabled(True)
+            self.voice_combo.setStyleSheet("color: #333333; background-color: white;")
+            self.voice_id_input.setEnabled(False)
+            self.voice_id_input.setStyleSheet("color: #999; background-color: #f0f0f0; padding: 8px; border: 1px solid #ddd; border-radius: 4px;")
+            self.status_label.setText("🎤 Voice selection mode - Choose from dropdown or use manual ID")
+    
     def check_api_keys(self):
         elevenlabs_key = os.getenv('ELEVENLABS_API_KEY')
         if elevenlabs_key:
@@ -302,8 +374,63 @@ class ShortsMakerGUI(QMainWindow):
         provider_text = self.tts_provider_combo.currentText()
         if "ElevenLabs" in provider_text:
             self.load_voices_for_provider("elevenlabs")
+            self.elevenlabs_info_label.show()  # Show ElevenLabs-specific info
         elif "Cartesia" in provider_text:
             self.load_voices_for_provider("cartesia")
+            self.elevenlabs_info_label.hide()  # Hide ElevenLabs-specific info
+    
+    def on_voice_category_changed(self):
+        """Handle voice category selection change"""
+        if not hasattr(self, 'current_voices') or not self.current_voices:
+            return
+        
+        selected_category_text = self.voice_category_combo.currentText()
+        if not selected_category_text or selected_category_text == "All Categories":
+            # Show all voices
+            self.populate_voice_combo(self.current_voices)
+        else:
+            # Extract the actual category name from the display text (e.g., "Female (12)" -> "Female")
+            selected_category = self.voice_category_combo.currentData()
+            print(f"🔍 Selected category data: {selected_category}")  # Debug info
+            if selected_category:
+                # Filter voices by category
+                filtered_voices = [voice for voice in self.current_voices if voice.get('category', 'Male') == selected_category]
+                print(f"🔍 Filtered {len(filtered_voices)} voices for category: {selected_category}")  # Debug info
+                self.populate_voice_combo(filtered_voices)
+            else:
+                # Fallback: try to extract category from text
+                category_name = selected_category_text.split(' (')[0]
+                print(f"🔍 Fallback category name: {category_name}")  # Debug info
+                filtered_voices = [voice for voice in self.current_voices if voice.get('category', 'Male') == category_name]
+                print(f"🔍 Fallback filtered {len(filtered_voices)} voices for category: {category_name}")  # Debug info
+                self.populate_voice_combo(filtered_voices)
+    
+    def populate_category_combo(self, voices):
+        """Populate the category combo box with available categories"""
+        self.voice_category_combo.clear()
+        self.voice_category_combo.addItem("All Categories")
+        
+        # Get unique categories from voices
+        categories = set()
+        for voice in voices:
+            category = voice.get('category', 'Male')
+            categories.add(category)
+        
+        # Sort categories for better UX
+        sorted_categories = sorted(categories)
+        for category in sorted_categories:
+            # Count voices in this category
+            count = sum(1 for voice in voices if voice.get('category', 'Male') == category)
+            self.voice_category_combo.addItem(f"{category} ({count})", category)
+            print(f"🔍 Added category: {category} with {count} voices")  # Debug info
+    
+    def populate_voice_combo(self, voices):
+        """Populate the voice combo box with the given voices"""
+        self.voice_combo.clear()
+        for voice in voices:
+            # Show just the voice name for clean, compact display
+            display_text = voice['name']
+            self.voice_combo.addItem(display_text, voice['id'])
     
     def load_voices_for_provider(self, provider_name):
         self.voice_combo.clear()
@@ -346,10 +473,19 @@ class ShortsMakerGUI(QMainWindow):
             voices = provider.get_available_voices()
             self.current_voices = voices
             
-            self.voice_combo.clear()
-            for voice in voices:
-                display_text = f"{voice['name']} - {voice['description']}"
-                self.voice_combo.addItem(display_text, voice['id'])
+            if provider_name == "elevenlabs":
+                # Populate category dropdown for ElevenLabs
+                self.populate_category_combo(voices)
+                # Show all voices initially
+                self.populate_voice_combo(voices)
+            else:
+                # For other providers, use the standard format
+                self.voice_category_combo.clear()
+                self.voice_category_combo.addItem("All Categories")
+                self.voice_combo.clear()
+                for voice in voices:
+                    display_text = f"{voice['name']} - {voice['description']}"
+                    self.voice_combo.addItem(display_text, voice['id'])
             
             self.test_voice_btn.setEnabled(True)
             self.status_label.setText(f"✅ Loaded {len(voices)} voices from {provider_name.title()}!")
@@ -359,8 +495,96 @@ class ShortsMakerGUI(QMainWindow):
             self.voice_combo.addItem(f"❌ Error loading voices: {str(e)}")
             self.status_label.setText(f"❌ Error: {str(e)}")
     
-    def test_voice(self):
+    def show_voice_info(self):
+        """Show voice information in a popup dialog"""
         if self.voice_combo.currentIndex() < 0:
+            return
+        
+        voice_id = self.voice_combo.currentData()
+        if not voice_id:
+            return
+        
+        # Find the voice in current_voices
+        selected_voice = None
+        for voice in self.current_voices:
+            if voice['id'] == voice_id:
+                selected_voice = voice
+                break
+        
+        if not selected_voice:
+            return
+        
+        # Create info dialog
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QTextEdit
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Voice Information - {selected_voice['name']}")
+        dialog.setModal(True)
+        dialog.resize(400, 300)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Voice name
+        name_label = QLabel(f"🎤 {selected_voice['name']}")
+        name_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #2196F3; padding: 10px;")
+        layout.addWidget(name_label)
+        
+        # Voice ID with copy functionality
+        id_layout = QHBoxLayout()
+        id_label = QLabel("🔑 Voice ID:")
+        id_label.setStyleSheet("font-size: 12px; color: #666; padding: 5px;")
+        id_layout.addWidget(id_label)
+        
+        self.voice_id_display = QLineEdit(selected_voice['id'])
+        self.voice_id_display.setReadOnly(True)
+        self.voice_id_display.setStyleSheet("font-family: 'Consolas', monospace; font-size: 11px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 3px; padding: 5px;")
+        self.voice_id_display.setSelection(0, len(selected_voice['id']))  # Select all text
+        id_layout.addWidget(self.voice_id_display)
+        
+        copy_id_btn = QPushButton("📋 Copy")
+        copy_id_btn.setMaximumWidth(60)
+        copy_id_btn.setStyleSheet("background-color: #4CAF50; color: white; padding: 5px; border-radius: 3px; font-size: 10px;")
+        copy_id_btn.clicked.connect(lambda: self.copy_voice_id(selected_voice['id']))
+        id_layout.addWidget(copy_id_btn)
+        
+        layout.addLayout(id_layout)
+        
+        # Category
+        if 'category' in selected_voice:
+            category_label = QLabel(f"📂 Category: {selected_voice['category']}")
+            category_label.setStyleSheet("font-size: 12px; color: #4CAF50; padding: 5px;")
+            layout.addWidget(category_label)
+        
+        # Description
+        desc_label = QLabel("📝 Description:")
+        desc_label.setStyleSheet("font-size: 12px; font-weight: bold; padding: 10px 5px 5px 5px;")
+        layout.addWidget(desc_label)
+        
+        desc_text = QTextEdit()
+        desc_text.setReadOnly(True)
+        desc_text.setPlainText(selected_voice['description'])
+        desc_text.setStyleSheet("background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; padding: 10px;")
+        layout.addWidget(desc_text)
+        
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet("background-color: #2196F3; color: white; padding: 8px 20px; border-radius: 4px; font-weight: bold;")
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        
+        dialog.exec()
+    
+    def copy_voice_id(self, voice_id):
+        """Copy voice ID to clipboard"""
+        from PyQt6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        clipboard.setText(voice_id)
+        # Show brief feedback
+        self.status_label.setText(f"✅ Voice ID copied to clipboard: {voice_id[:8]}...")
+    
+    def test_voice(self):
+        # Check if we have a valid voice selection
+        if not self.use_voice_id_checkbox.isChecked() and self.voice_combo.currentIndex() < 0:
             return
         
         try:
@@ -369,8 +593,17 @@ class ShortsMakerGUI(QMainWindow):
             
             provider_text = self.tts_provider_combo.currentText()
             provider_name = "elevenlabs" if "ElevenLabs" in provider_text else "cartesia"
-            voice_id = self.voice_combo.currentData()
-            voice_name = self.voice_combo.currentText().split(" - ")[0]
+            
+            # Get voice ID and name based on selection method
+            if self.use_voice_id_checkbox.isChecked() and provider_name == "elevenlabs":
+                voice_id = self.voice_id_input.text().strip()
+                if not voice_id:
+                    raise ValueError("Please enter a valid ElevenLabs voice ID")
+                voice_name = f"Voice ID: {voice_id[:8]}..."  # Show first 8 chars for display
+            else:
+                voice_id = self.voice_combo.currentData()
+                # Voice name is now just the display text (no ID in dropdown)
+                voice_name = self.voice_combo.currentText()
             
             provider = self.tts_providers.get(provider_name)
             if not provider:
@@ -529,7 +762,8 @@ class ShortsMakerGUI(QMainWindow):
         
         self.preview_text = QTextEdit()
         self.preview_text.setReadOnly(True)
-        self.preview_text.setMaximumHeight(250)
+        self.preview_text.setFixedHeight(300)
+        self.preview_text.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.preview_text.setStyleSheet("""
             QTextEdit { background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; color: #333333; }
         """)
@@ -887,7 +1121,14 @@ class ShortsMakerGUI(QMainWindow):
         if use_tts:
             provider_text = self.tts_provider_combo.currentText()
             tts_provider = "elevenlabs" if "ElevenLabs" in provider_text else "cartesia"
-            tts_voice_id = self.voice_combo.currentData()
+            
+            # Check if using manual voice ID input
+            if self.use_voice_id_checkbox.isChecked() and tts_provider == "elevenlabs":
+                tts_voice_id = self.voice_id_input.text().strip()
+                if not tts_voice_id:
+                    raise ValueError("Please enter a valid ElevenLabs voice ID")
+            else:
+                tts_voice_id = self.voice_combo.currentData()
         
         return {
             'video_folder': None,
